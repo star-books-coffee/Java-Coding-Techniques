@@ -80,3 +80,55 @@ class Astonaut {
 
 - **변수를 한글자로 짓지 마라**
 - 컴파일러는 컴파일타임에 이름을 대체하는데 바이트코드로는 전체이름과 한 글자 이름에 차이가 없으므로, 변수 이름이 길면 비효율적일까봐 걱정하지마라
+
+### 4.4. 축약 쓰지 않기
+
+- **가능하면 축약은 피하고, 매우 일반적인 경우에만 사용하고, 확신이 없다면 풀어써라**
+
+### 4.5. 무의미한 용어 쓰지 않기
+
+```java
+class MainSpaceShipManager {                                                             class SpaceShip {
+    AbstractRocketPropulsionEngine abstractRocketPropulsionEngine;                            Engine engine;
+    INavigationController navigationController;                                               Navigator navigator;
+    boolean turboEnabledFlag;                                                                 boolean turboEnabled;
+
+    void navigateSpaceShipTo(PlanetInfo planetInfo) {                                         void navigateTo(Planet destination) {   
+        RouteData data = navigationController.calculateRouteData(planetInfo);                     Route route = navigator.calculateRouteTo(destination);
+        LogHelper.logRouteData(data);                                                             Logger.log(route);
+        abstractRocketPropulsionEngine.invokeTask(data, turboEnabledFlag);                        engine.follow(route, turboEnabled);
+    }                                                                                         }
+}                                                                                        }
+ class LogHelper {                                                                       class Logger {
+    static void logRouteData(RouteData data) {                                              static void log(Route r data) {
+    }                                                                                       }
+}                                                                                        }
+ 
+interface RouteData {                                                                    interface RouteData {
+}                                                                                        }
+
+interface PlanetInfo {                                                                   interface Planet {
+}                                                                                        }
+
+interface INavigationController {                                                        interface Navigator {
+    void invokeNavigationTask(RouteData someData);                                           void invokeNavigationTask(Route someData);
+    RouteData calculateRouteData(PlanetInfo someData);					     Route calculateRouteTo(Planet someData);
+}					                                                 }
+
+class AbstractRocketPropulsionEngine {						         class Engine {
+    void invokeTask(RouteData someData, boolean b) {					     void follow(Route someData, boolean b) {
+    }											     }
+    ;                                                                                        ;
+}											 }
+```
+
+- 간결한 명명이 항상 미덕인 것은 아니고, 축약어 대신 길어도 서술적 이름이 낫다
+- 하지만 불필요한 무의미한 용어는 사용하지 마라
+	- main, manager, data, info, flag 처럼 자주 쓰이는 무의미한 용어를 low-hanging fruits (가장 쉽게 해결할 수 있는 방법) 이라고 부름
+- 타입 자체에 이미 명시되어 있으므로, abstract / impl / 접두사 I 도 불필요
+- logRouteData() 처럼 매개변수 종류를 메서드명에서 반복하는 경우도 제거
+- 메서드명에 포함된 invoke, call, do 같은 동사도 무의미함
+
+### 4.6. 도메인 용어 사용하기
+
+- **가능하면 코드 내 이름은 해당 `도메인` 에 맞게 짓고, 포괄적인 명칭은 피하라**
