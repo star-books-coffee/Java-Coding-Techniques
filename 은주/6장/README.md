@@ -68,3 +68,124 @@ class CruiseControlTest {
 - 자바나 JUnit 은 타입 검증을 지원하지 않기에, 인수를 올바른 순서로 작성해야 함
 - 실패한 테스트의 메시지를 읽을 때 **최소한 그 메시지 자체는 무조건 옳다고 가정하므로 가정이 틀리면 안됨!**
 - **assertEquals() 의 인수 순서에 주의를 기울여라**
+
+### 6.4. 합당한 허용값 사용하기
+
+```java
+class OxygenTankTest {
+
+    @Test
+    void testNewTankIsEmpty() {
+        OxygenTank tank = OxygenTank.withCapacity(100);
+        Assertions.assertEquals(0, tank.getStatus());
+    }
+
+    @Test
+    void testFilling() {
+        OxygenTank tank = OxygenTank.withCapacity(100);
+
+        tank.fill(5.8);
+        tank.fill(5.6);
+
+        Assertions.assertEquals(0.114, tank.getStatus());
+    }
+}
+```
+
+- 부동소수점 산술 연산은 근사화된 숫자일 뿐이므로, 부동소수점 연산을 테스트할 때는 소수점 자릿수를 명시해야 함
+
+```java
+class OxygenTankTest {
+    static final double TOLERANCE = 0.00001;
+
+    @Test
+    void testNewTankIsEmpty() {
+        OxygenTank tank = OxygenTank.withCapacity(100);
+
+        Assertions.assertEquals(0, tank.getStatus(), TOLERANCE);
+    }
+
+    @Test
+    void testFilling() {
+        OxygenTank tank = OxygenTank.withCapacity(100);
+
+        tank.fill(5.8);
+        tank.fill(5.6);
+
+        Assertions.assertEquals(0.114, tank.getStatus(), TOLERANCE);
+    }
+}
+```
+
+- assertEquals(double expected, double actual, double delta) assertion 은 delta 라는 허용값을 지원함
+    - 소수점 둘째자리까지 일치해야 한다면, 0.001 을 허용값으로 사용하면 됨
+- **assertEquals() 에 float 이나 double 을 사용할 때는 항상 자릿수를 알아야 하고 받아들일 수 있는 허용 수준을 명시하라**
+
+### 6.5. 예외 처리는 JUnit 에게 맡기기
+
+```java
+class LogbookTest {
+
+    @Test
+    void readLogbook() {
+        Logbook logbook = new Logbook();
+
+        try {
+            List<String> entries = logbook.readAllEntries();
+            Assertions.assertEquals(13, entries.size());
+        } catch (IOException e) {
+            Assertions.fail(e.getMessage());
+        }
+    }
+
+    @Test
+    void readLogbookFail() {
+        Logbook logbook = new Logbook();
+
+        try {
+            logbook.readAllEntries();
+            Assertions.fail("read should fail");
+        } catch (IOException ignored) {}
+    }
+}
+```
+
+- 첫번째 테스트 : 실패 시 메시지만 제공할 뿐, 전체 예외를 스택 추적으로 제공하지 않음
+    - 원인 사슬이 깨짐
+- 두번째 테스트 : 실제 예외가 일어나길 기대하는데, 코드만으로는 이유를 알 수 없음
+
+```java
+class LogbookTest {
+
+    @Test
+    void readLogbook() throws IOException {
+        Logbook logbook = new Logbook();
+
+        List<String> entries = logbook.readAllEntries();
+
+        Assertions.assertEquals(13, entries.size());
+    }
+
+    @Test
+    void readLogbookFail() {
+        Logbook logbook = new Logbook();
+
+        Executable when = () -> logbook.readAllEntries();
+
+        Assertions.assertThrows(IOException.class, when);
+    }
+}
+```
+
+- 첫번째 테스트 : “어떤 예외도 발생하지 않는다” 라는 assertion 을 포함한 테스트
+- 두번째 테스트 : assertThrows() 를 사용하여, 테스트에서 어떤 종류의 예외가 던져지길 바라는지 명시적으로 나타냄
+- **예외가 생기길 바라는 메서드만 JUnit5 의 Executable 타입 형태로 assertThrows() 에 전달하라**
+
+### 6.6. 테스트 설명하기
+
+- 테스트코드를 잘설명하기 위해 **메서드명에 상황과 테스트 중인 메서드, 검증할 assertion 을 나타내라**
+    - testFill2() → failOverfillTank()
+- **@DisplayName 표기로, 간결한 테스트 설명을 작성하라**
+    - `@DisplayName` (”Fail if fill level > tank capacity”)
+- **테스트를 그냥 삭제하지 말고 @Disabled 표기에 왜 비활성화 하는지도 설명하라**
+    - `@Disabled`(”[Why it’s disabled] TODO: [what’s the plan to enable again]”)
