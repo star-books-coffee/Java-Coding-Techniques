@@ -189,3 +189,134 @@ class LogbookTest {
     - `@DisplayName` (”Fail if fill level > tank capacity”)
 - **테스트를 그냥 삭제하지 말고 @Disabled 표기에 왜 비활성화 하는지도 설명하라**
     - `@Disabled`(”[Why it’s disabled] TODO: [what’s the plan to enable again]”)
+
+### 6.7. 독립형 테스트 사용하기
+
+```java
+class OxygenTankTest {
+    OxygenTank tank;
+
+    @BeforeEach
+    void setUp() {
+        tank = OxygenTank.withCapacity(10_000);
+        tank.fill(5_000);
+    }
+
+    @Test
+    void depressurizingEmptiesTank() {
+        tank.depressurize();
+
+        Assertions.assertTrue(tank.isEmpty());
+    }
+
+    @Test
+    void completelyFillTankMustBeFull() {
+        tank.fillUp();
+
+        Assertions.assertTrue(tank.isFull());
+    }
+}
+```
+
+- @BeforeEach, @BeforeAll 표기는 테스트의 **given 부분에 필요한 공통 설정 코드를 추출하여 한번만 작성할 수 있게 해줌**
+    - 하지만 설정메서드로 인해 매 단일 테스트 메서드마다 설정 메서드 역할을 떠올려야 함
+    - 테스트가 더이상 `독립적이지 않음`
+
+```java
+class OxygenTankTest {
+    static OxygenTank createHalfFilledTank() {
+        OxygenTank tank = OxygenTank.withCapacity(10_000);
+        tank.fill(5_000);
+        return tank;
+    }
+
+    @Test
+    void depressurizingEmptiesTank() {
+        OxygenTank tank = **createHalfFilledTank**();
+
+        tank.depressurize();
+
+        Assertions.assertTrue(tank.isEmpty());
+    }
+
+    @Test
+    void completelyFillTankMustBeFull() {
+        OxygenTank tank = createHalfFilledTank();
+
+        tank.fillUp();
+
+        Assertions.assertTrue(tank.isFull());
+    }
+}
+```
+
+- given 부분을 @BeforeEach 설정 메서드로 분리하는 대신 각 테스트에 static 메서드 형태로 분리하여 연결시켰음
+- @BeforeEach, @BeforeAll 표기가 만들어내는 암묵적 종속성은 코드를 읽기 힘들게 만드므로, 
+**given 부분을 static 메서드 형태로 분리하여 테스트와 연결시켜, 테스트와 설정 코드를 분명하게 연결지어라**
+
+### 6.8. 테스트 매개변수화
+
+```java
+class DistanceConversionTest {
+
+    @Test
+    void testConversionRoundTrip() {
+        assertRoundTrip(1);
+        assertRoundTrip(1_000);
+        assertRoundTrip(9_999_999);
+    }
+
+    private void assertRoundTrip(int kilometers) {
+        Distance expectedDistance = new Distance(
+                DistanceUnit.KILOMETERS,
+                kilometers
+        );
+
+        Distance actualDistance = expectedDistance
+                .convertTo(DistanceUnit.MILES)
+                .convertTo(DistanceUnit.KILOMETERS);
+
+        Assertions.assertEquals(expectedDistance, actualDistance);
+    }
+}
+```
+
+- 메서드 하나를 같은 방법으로 테스트하지만, **여러 다양한 입력 매개변수로 테스트하고 싶을 때** 위와 같은 코드를 짜게 된다
+- 하지만 하나의 테스트코드가 실패하게 되면, 그 뒤에 assertion 은 뛰어넘게 됨
+- 매개변수 집합을 순회하는 for 루프를 테스트 메서드에 넣어도 문제는 고칠 수 없음
+
+```java
+class DistanceConversionTest {
+
+    @ParameterizedTest(name = "#{index}: {0}km == {0}km->mi->km")
+    @ValueSource(ints = {1, 1_000, 9_999_999})
+    void testConversionRoundTrip(int kilometers) {
+        Distance expectedDistance = new Distance(
+                DistanceUnit.KILOMETERS,
+                kilometers
+        );
+
+        Distance actualDistance = expectedDistance
+                .convertTo(DistanceUnit.MILES)
+                .convertTo(DistanceUnit.KILOMETERS);
+
+        Assertions.assertEquals(expectedDistance, actualDistance);
+    }
+}
+```
+
+- 매개변수별로 각 테스트를 실행하고, 테스트당 assertion 을 하나씩만 넣도록 수정한다
+- **@ParameterizedTest 와 @ValueSource 표기로 테스트를 매개변수화 시켜라**
+    - 매개변수와 테스트코드를 분리시킬 수 있음
+    - @ParameterizedTest 의 name 속성으로, “테스트 설명하기” 적용 가능
+
+### 6.9. 경계 케이스 다루기
+
+- **테스트 코드는 가능한 경우의 수를 모두 테스트하는 게 아니라, 가장 틀리기 쉬운 `경계 케이스` 를 다뤄라**
+    - 매개변수의 **데이터 타입 경계** 정도는 최소한 테스트해라
+    
+    > int : 0, 1, -1, Integer.MAX_VALUE, Integer.MIN_VALUE, <br>
+    double : 0, 1.0, -1.0, Double.MAX_VALUE, Double.MIN_VALUE,<br>
+    Object[] : null, {}, {null}, {new Object(), null},<br>
+    List<Object> : null, Collections.emptyList(), Collections.singletonList(null), Arrays.asList(new Object(), null)
+    >
