@@ -216,3 +216,170 @@ inventory.stockUp(delivery);
 
 - 이제 Stack이 Collection이라 Inventory는 아무 변환 없이 바로 Stack을 받아들임
 - 심지어 Inventory는 Set, List, 필요하다면 Vector와 그 외 특수한 목적으로 만들어진 자료 구조까지 로드 가능
+
+
+## 7.4 가변 상태보다 불변 상태 사용하기
+
+### 개선 전 코드
+
+```java
+class Distance {
+    **DistanceUnit unit;
+    double value;**
+
+    Distance(DistanceUnit unit, double value) {
+        this.unit = unit;
+        this.value = value;
+    }
+
+    static Distance km(double value) {
+        return new Distance(DistanceUnit.KILOMETERS, value);
+    }
+
+    void add(Distance distance) {
+        distance.convertTo(unit);
+        **value += distance.value;**
+    }
+
+    void convertTo(DistanceUnit otherUnit) {
+        double conversionRate = unit.getConversionRate(otherUnit);
+        **unit = otherUnit;**
+        **value = conversionRate * value;**
+    }
+}
+```
+
+- 기본적으로 객체의 상태는 불변이고, 가능하면 객체를 불변으로 만들어야 잘못 사용할 경우가 적음
+
+```java
+Distance toMars = new Distance(DistanceUnit.KILOMETERS, 56_000_000);
+Distance marsToVenus = new Distance(DistanceUnit.LIGHTYEARS, 0.000012656528);
+Distance toVenusViaMars = toMars;
+toVenusViaMars.add(marsToVenus);
+```
+
+- toVenusViaMars와 toMars가 가리키는 객체가 같음 → toVenusViaMars.add(marsToVenus)를 호출하면 toMars 값까지 간접적으로 변환하게 됨
+- 이 문제를 컴파일러로 미연에 방지할 수 있음
+
+### 개선 후 코드
+
+```java
+final class Distance {
+    **final DistanceUnit unit;
+    final double value;**
+
+    Distance(DistanceUnit unit, double value) {
+        this.unit = unit;
+        this.value = value;
+    }
+
+    Distance add(Distance distance) {
+        **return new Distance(unit, value + distance.convertTo(unit).value);**
+    }
+
+    Distance convertTo(DistanceUnit otherUnit) {
+        double conversionRate = unit.getConversionRate(otherUnit);
+        **return new Distance(otherUnit, conversionRate * value);**
+    }
+}
+```
+
+- 객체는 유효하지 않은 변경이 일어나지 않도록 스스로 보호해야 하는데 가변성을 제한하면 가능함
+- 생성자의 value와 unit 필드에 final 키워드를 설정했기 때문에 이후로는 바꿀 수 없고, 거리를 계산하려면 매번 새로운 인스턴스가 필요함
+
+```java
+Distance toMars = new Distance(DistanceUnit.KILOMETERS, 56_000_000);
+Distance marsToVenus = new Distance(DistanceUnit.LIGHTYEARS, 0.000012656528);
+Distance toVenusViaMars = toMars.add(marsToVenus)
+                              .convertTo(DistanceUnit.MILES);
+```
+
+- 객체를 더 많이 생성한다는 단점은 있지만 자바에서 작은 객체는 적은 비용이 듦
+
+## 7.5 상태와 동작 결합하기
+
+### 개선 전 코드
+
+```java
+class Hull {
+    int holes;
+}
+
+class HullRepairUnit {
+
+    void repairHole(Hull hull) {
+        if (isIntact(hull)) {
+            return;
+        }
+        hull.holes--;
+    }
+
+    boolean isIntact(Hull hull) {
+        return hull.holes == 0;
+    }
+}
+```
+
+- 동작만 있고 상태가 없는 클래스를 만들면 정보 은닉이 불가능해지고 코드가 더 장황해짐
+
+### 개선 후 코드
+
+```java
+class Hull {
+    int holes;
+
+    void repairHole() {
+        if (isIntact()) {
+            return;
+        }
+        holes--;
+    }
+
+    boolean isIntact() {
+        return holes == 0;
+    }
+}
+```
+
+- Hull 클래스 스스로 기능을 제공해 상태와 동작을 합침
+- 메서드 내에서 입력 매개변수만 다루고 자신이 속한 클래스의 인스턴스 변수는 다르지 않는 경우를 유심히 살펴보아야 함
+
+## 7.6 참조 누수 피하기
+
+### 개선 전 코드
+
+```java
+private final List<Supply> supplies;
+
+    Inventory(List<Supply> supplies) {
+        this.supplies = supplies;
+    }
+
+    List<Supply> getSupplies() {
+        return supplies;
+    }
+}
+```
+
+- 명백하지 않은 객체에는 외부에서 접근할 수 있는 내부 상태가 항상 있음
+- 어떤 방식으로 조작할지 신중히 결정해야 심각한 버그를 막을 수 있음
+
+### 개선 후 코드
+
+```java
+class Inventory {
+
+    private final List<Supply> supplies;
+
+    Inventory(List<Supply> supplies) {
+        this.supplies = new ArrayList<>(supplies);
+    }
+
+    List<Supply> getSupplies() {
+        return Collections.unmodifiableList(supplies);
+    }
+}
+```
+
+- 전달한 리스트의 참조가 아니라 리스트 내 Supply 객체로 ArrayList를 채움
+- 인스턴스로의 참조가 클래스 밖으로 나가지 않음.
